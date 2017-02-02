@@ -27,9 +27,9 @@ buildurl <- function(...){
     matchReturn$siteType<-NULL
   if (matchReturn$organization == " "| matchReturn$organization== FALSE)
     matchReturn$organization<-NULL
-  if (matchReturn$siteid == " "| matchReturn$siteid== FALSE)
+  if (matchReturn$siteid == ""| matchReturn$siteid== FALSE)
     matchReturn$siteid<-NULL
-  if (matchReturn$huc==" "| matchReturn$huc== FALSE)
+  if (matchReturn$huc==""| matchReturn$huc== FALSE)
     matchReturn$huc<-NULL
   if (matchReturn$sampleMedia==" "| matchReturn$sampleMedia== FALSE)
     matchReturn$sampleMedia<-NULL
@@ -37,10 +37,19 @@ buildurl <- function(...){
     matchReturn$characteristicType<-NULL
   if (matchReturn$characteristicName==" "| matchReturn$characteristicName== FALSE | is.null(matchReturn$characteristicName))
     matchReturn$characteristicName<-NULL
-  if (matchReturn$startDateLo==Sys.Date() & matchReturn$startDateHi == Sys.Date()) {
-    matchReturn$startDateLo<-NULL
-    matchReturn$startDateHi<-NULL
+  if (is.null(matchReturn$startDateLo) | toString(matchReturn$startDateLo)==""){
+    matchReturn$startDateLo<-NULL}
+  else {
+    if (matchReturn$startDateLo==Sys.Date())
+      matchReturn$startDateLo<-NULL
+    }
+  if (is.null(matchReturn$startDateHi) | toString(matchReturn$startDateHi)==""){
+   matchReturn$startDateHi<-NULL}
+  else {
+   if (as.Date(matchReturn$startDateHi)==Sys.Date())
+     matchReturn$startDateHi<-NULL
   }
+
   values <- sapply(matchReturn, function(x) URLencode(as.character(paste(eval(x),collapse=";",sep=""))))
   
   if("bBox" %in% names(values)){
@@ -95,7 +104,7 @@ buildurl <- function(...){
   urlCall <- paste(paste(names(values),values,sep="="),collapse="&")
   
   
-  baseURL <- "http://www.waterqualitydata.us/Result/search?"
+  baseURL <- "https://www.waterqualitydata.us/Result/search?"
   urlCall <- paste0(baseURL,
                     urlCall,
                     "&mimeType=tsv&sorted=no")

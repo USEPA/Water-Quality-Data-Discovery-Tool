@@ -44,7 +44,7 @@ function(){
                                                                             dateInput("date_Lo", "From", format = "mm-dd-yyyy", value = ""),
                                                                             dateInput("date_Hi", "To", format = "mm-dd-yyyy", value = "")
                                                                             ),
-                                                                     column(3,selectizeInput('media',  label = HTML("<a href = 'http://www.waterqualitydata.us/portal_userguide/#WQPUserGuide-Table2'>Sample Media</a>"), multiple = TRUE, choices = '', options = list(
+                                                                     column(3,selectizeInput('media',  label = a("Sample Media", target="_blank", href = "https://www.waterqualitydata.us/portal_userguide/#WQPUserGuide-Table2"), multiple = TRUE, choices = '', options = list(
                                                                        valueField = 'value',
                                                                        labelField = 'value',
                                                                        searchField = 'value',
@@ -52,7 +52,7 @@ function(){
                                                                        create = FALSE,
                                                                        load = I("function(query, callback) {
                                                                                 $.ajax({
-                                                                                url: 'http://waterqualitydata.us/Codes/samplemedia?mimeType=json',
+                                                                                url: 'https://www.waterqualitydata.us/Codes/samplemedia?mimeType=json',
                                                                                 type: 'GET',
                                                                                 error: function() {
                                                                                 callback(res.codes);
@@ -74,7 +74,7 @@ function(){
                                                                        create = FALSE,
                                                                        load = I("function(query, callback) {
                                                                                 $.ajax({
-                                                                                url: 'http://waterqualitydata.us/Codes/characteristictype?mimeType=json',
+                                                                                url: 'https://www.waterqualitydata.us/Codes/characteristictype?mimeType=json',
                                                                                 type: 'GET',
                                                                                 error: function() {
                                                                                 callback();
@@ -84,19 +84,6 @@ function(){
                                                                                 }
                                                                                 });
 }")
-#                                                                        load = I("function(query, callback) {
-#                                                                                 if (!query.length) return callback();
-#                                                                                 $.ajax({
-#                                                                                 url: 'http://waterqualitydata.us/Codes/characteristictype?text=' + encodeURIComponent(query) + '&pagesize=20&pagenumber=1&mimeType=json',
-#                                                                                 type: 'GET',
-#                                                                                 error: function() {
-#                                                                                 callback();
-#                                                                                 },
-#                                                                                 success: function(res) {
-#                                                                                 callback(res.codes);
-#                                                                                 }
-#                                                                                 });
-#}")
                                                                      )),
                                                                             bsPopover("group", "Characteristic Group Help", 
                                                                                       "To select a characteristic group start typing the group name in the box.  This will generate a drop-down list.  Characteristic groups can be selected from the drop-down list.   Select multiple items by clicking on each desired option.  The selected options will appear in the Characteristic Group box.  To remove a selected item, click on it to select it, then click the backspace key.",
@@ -110,7 +97,7 @@ function(){
                                                                        load = I("function(query, callback) {
                                                                                 if (!query.length) return callback();
                                                                                 $.ajax({
-                                                                                url: 'http://waterqualitydata.us/Codes/characteristicname?mimeType=json',
+                                                                                url: 'https://www.waterqualitydata.us/Codes/characteristicname?mimeType=json',
                                                                                 type: 'GET',
                                                                                 error: function() {
                                                                                 callback();
@@ -126,7 +113,9 @@ function(){
                                                                                       "top", trigger = "hover", options = list(container = "body"))))),
                                            bsCollapsePanel(h3("Site Parameters", style  = "text-align:center"), 
                                                            wellPanel( style = "overflow: auto;",
-                                                                      column(4, selectizeInput('site_type', label = HTML("<a href = 'http://www.waterqualitydata.us/portal_userguide/#WQPUserGuide-Table1'>Site Type</a>"), multiple = TRUE, choices = '', options = list(
+                                                                      div(style = "height:250px;",
+                                                                        column(4, selectizeInput('site_type', label = HTML("<a target = '_new' href = 'https://www.waterqualitydata.us/portal_userguide/#WQPUserGuide-Table1'>Site Type</a>"), 
+                                                                                               multiple = TRUE, choices = '', options = list(
                                                                         valueField = 'value',
                                                                         labelField = 'value',
                                                                         searchField = 'value',
@@ -135,7 +124,7 @@ function(){
                                                                         load = I("function(query, callback) {
                                                                                  if (!query.length) return callback();
                                                                                  $.ajax({
-                                                                                 url: 'http://waterqualitydata.us/Codes/sitetype?mimeType=json',
+                                                                                 url: 'https://www.waterqualitydata.us/Codes/sitetype?mimeType=json',
                                                                                  type: 'GET',
                                                                                  error: function() {
                                                                                  callback();
@@ -158,7 +147,7 @@ function(){
                                                                         load = I("function(query, callback) {
                                                                                 if (!query.length) return callback();
                                                                                 $.ajax({
-                                                                                url: 'http://waterqualitydata.us/Codes/organization?mimeType=json',
+                                                                                url: 'https://www.waterqualitydata.us/Codes/organization?mimeType=json',
                                                                                 type: 'GET',
                                                                                 error: function() {
                                                                                 callback();
@@ -176,7 +165,7 @@ function(){
                                                                              bsPopover("site_id", "Site ID Help",
                                                                                        "A site id is a designator used to describe the unique name, number, or code assigned to identify the monitoring location. Site IDs are case-sensitive and should be entered in the following format: AGENCY-STATION NUMBER. More than one site ID may be entered, separated by semicolons. If you are entering an NWIS site, use USGS as the AGENCY.",
                                                                                        "top", trigger = "hover", options = list(container = "body"))))
-             )))),
+             ))))),
       fluidRow(
         column(5),
         column(2,

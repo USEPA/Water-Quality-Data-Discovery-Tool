@@ -11,7 +11,7 @@ options(scipen=30)
 source("external/buildurl.R", local=TRUE)
 source("external/readWQPdata_app.R", local=TRUE)
 source("external/whatWQPsites_app.R", local=TRUE)
-
+source("external/getData.R", local=TRUE)
 #Global variables
 display = c("Station", "Name", "ActivityStartDate",  "Characteristic", "Result",
             "Unit", "ResultSampleFractionText", 
@@ -49,6 +49,10 @@ compute_data <- function(updateProgress = NULL) {
 
 shinyServer(
   function(input, output, session) {    
+    # for Desktop bat file
+    session$onSessionEnded(function() {
+      stopApp()
+    })
     # Take the labels and get the FIPS for State and county
     state_FIPS<-reactive({
       if (is.null(input$state)){
@@ -95,6 +99,22 @@ shinyServer(
         return(" ")
       } else (input$site_id)
     })
+    
+    ## County selection filter
+    output$county <- renderUI({
+      countiesdt <- data.table(counties)
+      #   countystate <- countiesdt[grepl(input$state, desc, ignore.case = TRUE)]
+      if(is.null(input$state)){
+        selectizeInput("county", label=p("Choose a County"), selected = NULL,
+                       choices = as.character(countiesdt$desc) , multiple = TRUE)
+      } else {
+        selectizeInput("county", label=p("Choose a County"), selected = NULL,
+                       choices = countydt[state %in% input$state ,as.character(unique(desc))] , 
+                       multiple = TRUE)
+      }
+      
+    })
+    
     # Generate the url for the header pull
     url<-reactive({ 
       url<-buildurl(bBox = c(input$West, input$South, input$East, input$North), lat = input$LAT, long = input$LONG, within = input$distance,
@@ -105,25 +125,38 @@ shinyServer(
     output$URL<-renderText({
       url()
     })
+    
+  
+    
     # Run the header pull
-    RECORDS<-eventReactive(input$CHECK, {
-      HEAD(url())$headers$'total-result-count'
-    })
+   # RECORDS<-eventReactive(input$CHECK, {
+    #  HEAD(url())$headers$'total-result-count'
+   # })
     # Check number of records - conditional panel trigger
     rec_count<-eventReactive(input$CHECK, {
-      RECORDS()
-    })
-    rec_count<-reactive({
-      if( is.null(RECORDS())|as.numeric(RECORDS()) >= 100000){#| (input$CHECK%%2==1 & input$CHECK != 1)) { # won't display if clicked an odd number of times
+      if(is.null(RECORDS())|as.numeric(RECORDS()) >= 200000|as.numeric(RECORDS())==0){#| (input$CHECK%%2==1 & input$CHECK != 1)) { # won't display if clicked an odd number of times
         return("no")
       } else {#(as.numeric(RECORDS()) < 100000 & as.numeric(RECORDS()) != 0){
         return("yes")
       }
     })
     
-    STATIONS<-eventReactive(input$CHECK, {
-      HEAD(url())$headers$'total-site-count'
-    })
+  Headerpull<-eventReactive(input$CHECK,{
+    progress<-shiny::Progress$new()
+    progress$set(message = "Checking Record Count", value = 0)
+    on.exit(progress$close())
+    return(HEAD(url()))
+  })  
+  RECORDS<-reactive({
+   return(Headerpull()$header$'total-result-count')
+  })
+  STATIONS<-reactive({
+   return(Headerpull()$header$'total-site-count')
+  })
+  
+  #  STATIONS<-eventReactive(input$CHECK, {
+    #  HEAD(url())$headers$'total-site-count'
+   # })
     # passes to the condition to trigger conditional panel
     output$Rec_count<-renderText({
       rec_count()
@@ -132,32 +165,19 @@ shinyServer(
     
     # displays record count to User
     output$REC_txt<-renderText({
-      #if(input$CHECK == 0 | is.null(input$CHECK)) return()
-      withProgress(message = 'Checking record count',
-                   detail = 'This may take a while...', value = 0, {
-                     for (i in 1:15) {
-                       incProgress(1/15)
+      withProgress(message = 'Updating',
+                   detail = 'Please wait...', value = 0, {
+                     for (i in 1:5) {
+                       incProgress(1/5)
                        Sys.sleep(0.25)
                      }
                    })
-        return( paste("Your query returns ", RECORDS() , " records from ", STATIONS(), " stations."))  
-    })
+        #if(input$CHECK == 0 | is.null(input$CHECK)) return()
+             return( paste("Your query returns ", RECORDS() , " records from ", STATIONS(), " stations."))  
+      })
 
     
-## County selection filter
-    output$county <- renderUI({
-        countiesdt <- data.table(counties)
-     #   countystate <- countiesdt[grepl(input$state, desc, ignore.case = TRUE)]
-        if(is.null(input$state)){
-            selectizeInput("county", label=p("Choose a County"), selected = NULL,
-                           choices = as.character(countiesdt$desc) , multiple = TRUE)
-        } else {
-            selectizeInput("county", label=p("Choose a County"), selected = NULL,
-                           choices = countydt[state %in% input$state ,as.character(unique(desc))] , 
-                           multiple = TRUE)
-        }
-        
-    })
+
       
 ########################## Modal in Query tab ######################################
 output$modal1 <- renderUI({
@@ -185,7 +205,7 @@ url_display<-eventReactive(input$CHECK, {
     data<-eventReactive(input$IMPORT, {
       # Trying a reactive example from http://shiny.rstudio.com/gallery/progress-bar-example.html
       progress<-shiny::Progress$new()
-      progress$set(message = "Downloading Data", value = 0)
+      progress$set(message = "Downloading Data, please be patitient, this may take some time.", value = 0)
       on.exit(progress$close())
       updateProgress<-function(value = NULL, detail = NULL){
         if(is.null(value)){
@@ -193,14 +213,16 @@ url_display<-eventReactive(input$CHECK, {
           value<-value + (progress$getMax() - value)/5
         }
         progress$set(value = value, detail = detail)
-      }  
-      compute_data(updateProgress)
-      readWQPdata_app(bBox = c(input$West, input$South, input$East, input$North), lat = input$LAT, long = input$LONG, within = input$distance,
-       statecode = state_FIPS(), countycode = county_FIPS(), siteType = type(), organization = org(), 
-       siteid = input$site_id, huc = huc8s(), sampleMedia = sample_media(), characteristicType = char_group(), characteristicName = char(),
-       startDateLo = input$date_Lo, startDateHi = input$date_Hi)
+      }
+      url<-buildurl(bBox = c(input$West, input$South, input$East, input$North), lat = input$LAT, long = input$LONG, within = input$distance,
+                    statecode = state_FIPS(), countycode = county_FIPS(), siteType = type(), organization = org(), 
+                    siteid = site(), huc = huc8s(), sampleMedia = sample_media(), characteristicType = char_group(), characteristicName = char(),
+                    startDateLo = as.Date(input$date_Lo, format = '%m-%d-%Y'), startDateHi = as.Date(input$date_Hi, format = '%m-%d-%Y'))
+     #The next line of code is new, and calls the new module for getting the data 
+     return(getWQPData_app(url))
+
     })
-    
+ 
     # Clear out import modal for each launch - This needs work 11/2/2015
     val<-reactiveValues( display = NULL, display2 = NULL, data = NULL)
     observeEvent(input$CHECK, {
@@ -219,7 +241,7 @@ url_display<-eventReactive(input$CHECK, {
     outputOptions(output, 'Display2', suspendWhenHidden=FALSE)
     
     success<-reactive({
-      if(dim(data())[1]>0){
+      if(RECORDS()>0 & dim(data())[1]>0){
         return("yes")
       }else{
         return("no")
@@ -268,6 +290,15 @@ url_display<-eventReactive(input$CHECK, {
       data.frame(data_dt())
     })
     
+  output$All_Data = DT::renderDataTable(
+  all_data()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
+  extensions = 'Buttons', options = list(dom = 'lfrBtip', buttons = I('colvis'), 
+                                         pageLength = 100,
+                                         lengthMenu = c(100, 200, 500),
+                                         columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
+  ), server = TRUE)
+outputOptions(output, 'All_Data', suspendWhenHidden=TRUE)
+
     # Generating a character string for the method of non_detects 
     non_detect_method <- reactive({
         method <- switch(input$ND_method,
@@ -278,12 +309,7 @@ url_display<-eventReactive(input$CHECK, {
         return(method)
     })
     
-    output$All_Data = DT::renderDataTable(
-      all_data()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                               columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
-      ), server = TRUE)
-    outputOptions(output, 'All_Data', suspendWhenHidden=FALSE)
+ 
     
     meta_gen_alldata <- reactive({
         data <- all_data()
@@ -305,11 +331,11 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_data1 <- downloadHandler(
         filename = function() {
-            paste('All_data-', Sys.Date(), '.csv', sep='')
+            paste('All_data-', Sys.Date(), '.tsv', sep='')
         },
         content = function(con) {
-           write.table(meta_gen_alldata(), con, row.names = F, col.names = FALSE, sep = ",")
-           write.table(all_data(), con, row.names = F, sep = ",", append = TRUE)
+           write.table(meta_gen_alldata(), con, row.names = F, col.names = FALSE, sep = "\t")
+           write.table(all_data(), con, row.names = F, sep = "\t", append = TRUE)
         })
     
     duplicate_logic<-reactive({
@@ -342,10 +368,12 @@ url_display<-eventReactive(input$CHECK, {
       }})
     output$Filtered = DT::renderDataTable(
       filtered_data()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                            columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
+      extensions = 'Buttons', options = list(dom = 'lfrBtip', buttons = I('colvis'), 
+                                             pageLength = 100,
+                                             lengthMenu = c(100, 200, 500),
+                                             columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
       ), server = TRUE)
-    outputOptions(output, 'Filtered', suspendWhenHidden=FALSE)
+    outputOptions(output, 'Filtered', suspendWhenHidden=TRUE)
     
     meta_gen_filtered <- reactive({
         data <- filtered_data()
@@ -364,21 +392,23 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_data6 <- downloadHandler(
       filename = function() {
-        paste('Filtered_data-', Sys.Date(), '.csv', sep='')
+        paste('Filtered_data-', Sys.Date(), '.tsv', sep='')
       },
       content = function(con) {
-          write.table(meta_gen_filtered(), con, row.names = F, col.names = FALSE, sep = ",")
-          write.table(filtered_data(), con, row.names = F, sep = ",", append = TRUE)
+          write.table(meta_gen_filtered(), con, row.names = F, col.names = FALSE, sep = "\t")
+          write.table(filtered_data(), con, row.names = F, sep = "\t", append = TRUE)
       })    
     no_units<-reactive({
       data.frame(data_dt()[Unit == "" & !ResultDetectionConditionText %in% c('Not Detected', 'Present Below Quantitation Limit')])
     })
     output$NO_UNITS = DT::renderDataTable(
       no_units()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                               columnDefs = list(list(visible =  F, targets = list(5,6,7,8,9)))
+      extensions = 'Buttons', options = list(dom = 'lfrBtip', buttons = I('colvis'), 
+                                             pageLength = 100,
+                                             lengthMenu = c(100, 200, 500),
+                                             columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
       ), server = TRUE)
-    outputOptions(output, 'NO_UNITS', suspendWhenHidden=FALSE)
+    outputOptions(output, 'NO_UNITS', suspendWhenHidden=TRUE)
     
     meta_gen_no_units <- reactive({
         data <- no_units()
@@ -398,11 +428,11 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_data3 <- downloadHandler(
       filename = function() {
-        paste('Missing_Units-', Sys.Date(), '.csv', sep='')
+        paste('Missing_Units-', Sys.Date(), '.tsv', sep='')
       },
       content = function(con) {
-          write.table(meta_gen_no_units(), con, row.names = F, col.names = FALSE, sep = ",")
-          write.table(no_units(), con, row.names = F, sep = ",", append = TRUE)
+          write.table(meta_gen_no_units(), con, row.names = F, col.names = FALSE, sep = "\t")
+          write.table(no_units(), con, row.names = F, sep = "\t", append = TRUE)
       })
     
     no_methods<-reactive({
@@ -417,10 +447,12 @@ url_display<-eventReactive(input$CHECK, {
     })
     output$NO_METH = DT::renderDataTable(
       no_methods()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                               columnDefs = list(list(visible =  F, targets = list(5,6,7,8,9)))
+      extensions = 'Buttons', options = list(dom = 'lfrBtip', buttons = I('colvis'), 
+                                             pageLength = 100,
+                                             lengthMenu = c(100, 200, 500),
+                                             columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
       ), server = TRUE)
-    outputOptions(output, 'NO_METH', suspendWhenHidden=FALSE)
+    outputOptions(output, 'NO_METH', suspendWhenHidden=TRUE)
     
     meta_gen_no_methods <- reactive({
         data <- no_methods()
@@ -439,21 +471,23 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_data4 <- downloadHandler(
       filename = function() {
-       paste('Missing_Methods-', Sys.Date(), '.csv', sep='')
+       paste('Missing_Methods-', Sys.Date(), '.tsv', sep='')
       },
       content = function(con) {
-          write.table(meta_gen_no_methods(), con, row.names = F, col.names = FALSE, sep = ",")
-          write.table(no_methods(), con, row.names = F, sep = ",", append = TRUE)
+          write.table(meta_gen_no_methods(), con, row.names = F, col.names = FALSE, sep = "\t")
+          write.table(no_methods(), con, row.names = F, sep = "\t", append = TRUE)
       })
     duplicates<-reactive({
       data.frame(data_dt()[duplicate_logic()])
     })
     output$DUPS = DT::renderDataTable(
       duplicates()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                               columnDefs = list(list(visible =  F, targets = list(5,6,7,8,9)))
+      extensions = 'Buttons', options = list(dom = 'lfrBtip', buttons = I('colvis'), 
+                                             pageLength = 100,
+                                             lengthMenu = c(100, 200, 500),
+                                             columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
      ), server = TRUE)
-    outputOptions(output, 'DUPS', suspendWhenHidden=FALSE)
+    outputOptions(output, 'DUPS', suspendWhenHidden=TRUE)
     
     meta_gen_duplicates <- reactive({
         data <- duplicates()
@@ -472,21 +506,23 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_data5 <- downloadHandler(
       filename = function() {
-        paste('Duplicates-', Sys.Date(), '.csv', sep='')
+        paste('Duplicates-', Sys.Date(), '.tsv', sep='')
       },
       content = function(con) {
-          write.table(meta_gen_duplicates(), con, row.names = F, col.names = FALSE, sep = ",")
-          write.table(duplicates(), con, row.names = F, sep = ",", append = TRUE)
+          write.table(meta_gen_duplicates(), con, row.names = F, col.names = FALSE, sep = "\t")
+          write.table(duplicates(), con, row.names = F, sep = "\t", append = TRUE)
      })
     non_detects<-reactive({
       data.frame(data_dt()[ResultDetectionConditionText %in% c('Not Detected', 'Present Below Quantification Limit')])
     })
     output$ND_Table = DT::renderDataTable(
       non_detects()[, display, drop=FALSE],  escape = -1, rownames = FALSE,
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                               columnDefs = list(list(visible =  F, targets = list(5,6,7,8,9)))
+      extensions = 'Buttons', options = list(dom = 'lfrBtip', buttons = I('colvis'), 
+                                             pageLength = 100,
+                                             lengthMenu = c(100, 200, 500),
+                                             columnDefs = list(list(visible =  F, targets = list(5,6,7,8)))
       ), server = TRUE)
-    outputOptions(output, 'ND_Table', suspendWhenHidden=FALSE)
+    outputOptions(output, 'ND_Table', suspendWhenHidden=TRUE)
     
     meta_gen_non_detects <- reactive({
         data <- non_detects()
@@ -505,11 +541,11 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_data2 <- downloadHandler(
       filename = function() {
-        paste('Non_Detects-', Sys.Date(), '.csv', sep='')
+        paste('Non_Detects-', Sys.Date(), '.tsv', sep='')
       },
       content = function(con) {
-          write.table(meta_gen_non_detects(), con, row.names = F, col.names = FALSE, sep = ",")
-          write.table(non_detects(), con, row.names = F, sep = ",", append = TRUE)
+          write.table(meta_gen_non_detects(), con, row.names = F, col.names = FALSE, sep = "\t")
+          write.table(non_detects(), con, row.names = F, sep = "\t", append = TRUE)
       })
     
     summarized<-eventReactive(input$SUMMARY, {
@@ -521,7 +557,7 @@ url_display<-eventReactive(input$CHECK, {
                        #return() # this is shortening the time to return the header info
                      }
                    })
-      return(data.frame(data_dt()[,.(Minimum = min(Result), Maximum = max(Result), Average= mean(Result), Count = .N),
+      return(data.frame(data_dt()[,.(Minimum = min(Result, na.rm = TRUE), Maximum = max(Result, na.rm = TRUE), Average= mean(Result, na.rm = TRUE), Count = .N),
                                   by = c("Station", "Name", "ActivityMediaName", "Characteristic", "Unit", "ResultSampleFractionText" )]))
     })
 
@@ -559,11 +595,11 @@ url_display<-eventReactive(input$CHECK, {
     
     output$Save_Summary_Data <- downloadHandler(
       filename = function() {
-        paste('Summary_Data-', Sys.Date(), '.csv', sep='')
+        paste('Summary_Data-', Sys.Date(), '.tsv', sep='')
       },
       content = function(con) {
-          write.table(meta_gen_summarized(), con, row.names = F, col.names = FALSE, sep = ",")
-          write.table(summarized(), con, row.names = F, sep = ",", append = TRUE)
+          write.table(meta_gen_summarized(), con, row.names = F, col.names = FALSE, sep = "\t")
+          write.table(summarized(), con, row.names = F, sep = "\t", append = TRUE)
       })
    output$check1 <- renderUI({
       data<-data.table(data_dt())
@@ -621,7 +657,7 @@ output$home_date<-renderUI({
   test<-eventReactive (input$submit_filters, {
     data <- data.table(spfilter_dat())
     data<-data[ActivityStartDate>as.Date(as.character(input$spdate[1])) & ActivityStartDate<as.Date(as.character(input$spdate[2]))]
-  })
+    })
   ## Create the data for the map from the filtered data
 map_df <- reactive ({
   if(input$submit_filters==0){
@@ -630,7 +666,7 @@ map_df <- reactive ({
                      Samples = length(unique(ActivityIdentifier))), by = "Station"]
     data <- as.data.frame(data_sum)
     return(data)
-  } else if(val$display2=='no'){
+  } else if(val$display2=="no"){
     dat<-data.table(filtered_data())
     data_sum<-dat[,.(.N, Name = first(Name), LatitudeMeasure = first(LatitudeMeasure), LongitudeMeasure = first(LongitudeMeasure),
                      Samples = length(unique(ActivityIdentifier))), by = "Station"]
@@ -769,11 +805,11 @@ output$spvalue <- renderUI({
     data <- data.table(filtered_data())
     fluidRow(column(6,
                     numericInput('minvalue', h5("Minimum:"),
-                                 value = min(as.numeric(as.character(filtered_data()$Result)))
+                                 value = min(as.numeric(as.character(filtered_data()$Result)), na.rm = TRUE)
                     )),
              column(6,
                     numericInput('maxvalue', h5("Maximum:"),
-                                 value = max(as.numeric(as.character(filtered_data()$Result)))
+                                 value = max(as.numeric(as.character(filtered_data()$Result)), na.rm = TRUE)
                     )),
              bsPopover("minvalue", "Enter Minimum Value", "Do not leave this field blank.  You must enter a minimum value.",
                        "top", trigger = "hover", options = list(container = "body")),
@@ -783,8 +819,8 @@ output$spvalue <- renderUI({
 })
 observe({
   updateDateRangeInput(session, "spdate",
-                       start = min(filtered_data()$ActivityStartDate),
-                       end = max(filtered_data()$ActivityStartDate))
+                       start = min(filtered_data()$ActivityStartDate, na.rm = TRUE),
+                       end = max(filtered_data()$ActivityStartDate, na.rm = TRUE))
 })
 
 #################################  Map and draggable panel #############################################
@@ -800,81 +836,76 @@ observe({
     
     output$map<-renderLeaflet({
       radiusFactor <- 50
-      leaflet() %>%
-        #setView(lng = -93.85, lat = 37.45, zoom = 4)%>%
-        fitBounds(lng1 = min(map_df()$LongitudeMeasure), lat1 = min(map_df()$LatitudeMeasure), lng2 = max(map_df()$LongitudeMeasure), lat2 = max(map_df()$LatitudeMeasure))%>%
-        addTiles( "//{s}.tiles.mapbox.com/v3/jcheng.map-5ebohr46/{z}/{x}/{y}.png")
-    })
-
-    session$onFlushed(once=F, function(){
-      radiusFactor <- 50
-      observe({
-        leafletProxy("map", session) %>% clearMarkers()
-        leafletProxy("map", session) %>% addCircleMarkers(
-          lat = map_df()$LatitudeMeasure, 
-          lng = map_df()$LongitudeMeasure, 
+      leaflet(map_df()) %>%
+        fitBounds(lng1 = ~min(LongitudeMeasure), lat1 = ~min(LatitudeMeasure), 
+                  lng2 = ~max(LongitudeMeasure), lat2 = ~max(LatitudeMeasure)) %>%
+        addTiles( "//{s}.tiles.mapbox.com/v3/jcheng.map-5ebohr46/{z}/{x}/{y}.png") %>%
+        addCircleMarkers(
+          lng= ~LongitudeMeasure, 
+          lat= ~LatitudeMeasure, 
           radius = (log(map_df()$N) + 2)  * radiusFactor / 5^2,
-          layerId=row.names(map_df()),
+          layerId = row.names(map_df())
+         # color = ~ifelse(Tot_Exceed == 0, 'black','blue'),
         )
-      })
-     })        
-    observeEvent(input$CHECK, {
-      leafletProxy("map", session) %>% clearMarkers()
     })
-    observeEvent(input$map_marker_mouseover, {
+    
+    observeEvent(input$map_marker_click, {
       leafletProxy("map")%>%clearPopups()
       content<- as.character(tagList(
-        tags$strong(paste("Latitude ", map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["LatitudeMeasure"]], 
-                          "Longtitude ", map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["LongitudeMeasure"]])),
+        tags$strong(paste("Latitude ", map_df()[row.names(map_df()) == input$map_marker_click["id"], ][["LatitudeMeasure"]], 
+                          ", Longtitude ", map_df()[row.names(map_df()) == input$map_marker_click["id"], ][["LongitudeMeasure"]])),
         tags$br(),
-        tags$strong(paste("Station ID", map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["Station"]], ',')),
-        tags$strong(paste("Station Name", map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["Name"]], ',')),
+        tags$strong(paste("Station ID:", map_df()[row.names(map_df()) == input$map_marker_click["id"], ][["Station"]], ',')),
+        tags$strong(paste("Station Name:", map_df()[row.names(map_df()) == input$map_marker_click["id"], ][["Name"]], ',')),
         tags$strong(paste(map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][['Samples']], " sample(s), ")),
-        tags$strong(paste(map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["N"]], " results")))
-      )
-      leafletProxy("map")%>% addPopups( input$map_marker_mouseover["lat"], input$map_marker_mouseover["lng"], 
-                                        content)
-       isolate({
-        stations<-map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ]
-        selected_station <<- stations
-        station_name<<-stations[["Station"]]
-        output$Map_select<-renderText({
-          paste(map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["Name"]])
-        })
-        output$Map_summary<-renderText({
-          paste("Would you like to summarize station", map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["Name"]], " ?")
-        })
-    }) 
+       tags$strong(paste(map_df()[row.names(map_df()) == input$map_marker_mouseover["id"], ][["N"]], " results"))
+       ))
+      leafletProxy("map")%>% addPopups(map_df()[row.names(map_df()) == input$map_marker_click["id"], ][["LongitudeMeasure"]], map_df()[row.names(map_df()) == input$map_marker_click["id"], ][["LatitudeMeasure"]], 
+                                        paste(content, '<br></br>',
+                                              actionButton("Stat_Summary", "Select this Location", 
+                                                           onclick = 'Shiny.onInputChange(\"button_click\",  Math.random())'),
+                                              sep = ""))
     })
-
-#################################  Station Summary  ##########################################
-# *** Specifying station to be summarized
-    station_val<-reactiveValues(stat_display = NULL, station1 = NULL, station2 = NULL, stat_data = NULL, 
-                                stat_data2 = NULL, graph_display = NULL)
-    observeEvent(input$Station_select, {
-      data <- if(input$submit_filters==0){
-        data.table(filtered_data())
-        } else {  data.table(test())}
-      station_val$station1<-selected_station[["Station"]]
-      station_val$station2<-selected_station[["Name"]]
-      station_val$stat_data<- data[Station == selected_station[["Station"]]]
+    
+    
+    
+    #################################  Station Summary  ##########################################
+ 
+    station_info<-eventReactive(input$button_click,{
+     data <- map_df()[row.names(map_df()) == input$map_marker_click$id,]
+     data <- data.table(data)
+     data[, Name := as.character(Name)]
+     data[, Station := as.character(Station)]
+     
+     return(data)
     })
+    
+    station_data <- eventReactive(input$button_click, {
+      mapData <- data.table(dat_display())
+      data1<- mapData[Station == station_info()$Station, ]
+      data1[, Name := as.character(Name)]
+      data1[, Station := as.character(Station)]
+      data1[, Characteristic := as.character(Characteristic)]
+      
+      return(data1)
+    })   
 
 output$param_range_freq <- renderUI({
-    data <- station_val$stat_data
-    if(is.null(data)) {
+ 
+  data2 <- station_data()
+    if(is.null(data2) | is.na(data2)) {
       br()
       br()
       h3('Please select a station on the map.', style  = "text-align:center ; color: #990000 ;")
     }else{
       if(is.null(input$param)){
-        data <- data
+        data2 <- data2
       } else {
-        data <- data[Characteristic %in% input$param]
+        data2 <- data2[Characteristic %in% input$param]
       }
-      wellPanel(selectizeInput('param_range_freq_sel', h4('Select parameters to view date range and frequency'),
-                     choices = unique(as.character(data$Characteristic)), 
-                     selected = unique(as.character(data$Characteristic))[c(1:10)],
+      wellPanel(selectizeInput('param_range_freq_sel', h4('Select parameters to view date range and frequency (up to 30 parameters)'),
+                     choices = unique(as.character(data2$Characteristic)), 
+                     selected = unique(as.character(data2$Characteristic))[c(1:10)],
                      multiple = TRUE),
       bsPopover("param_range_freq_sel", "Sampling Frequency",
                 "Please select Characteristics of interest to view date range and sample collection frequency. Multiple characterisitcs may be selected.",
@@ -884,18 +915,24 @@ output$param_range_freq <- renderUI({
 })
 
     output$Station_Summary_Panel <- renderUI({
-      h4(paste("Summary for station ", station_val$station2))
+      h4(paste("Summary for station ", station_info()$Name))
     })
+    
+    output$Station_Summary_Panel2 <- renderUI({
+      h4(paste("Summary for station ", station_info()$Name))
+    })
+    
     output$Station_Summary_text<-renderUI({
-        data <- station_val$stat_data
-        records<-dim(data)[1]
-        parameters<-length(unique(data$Characteristic))
+   
+        dataStat <- station_data()
+        records<-dim(dataStat)[1]
+        parameters<-length(unique(dataStat$Characteristic))
       p(paste("There are ", records, " records representing ", parameters, " characteristics at this station."))
     })
 
     
     output$Station_data_time_plot<-renderPlot({
-      station_subset<-station_val$stat_data[Characteristic %in% input$param_range_freq_sel] # this could be  modified
+      station_subset<-station_data()[Characteristic %in% input$param_range_freq_sel] # this could be  modified
       p1 <- ggplot(station_subset, aes(x=ActivityStartDate, y=Characteristic))+
         geom_point(color = "blue", size = 5, alpha = 1/2)+
         labs(x = '',y='')+
@@ -914,22 +951,24 @@ output$param_range_freq <- renderUI({
       } else {test()}
     })
     output$Map_Table = DT::renderDataTable(
-      data.frame(dat_display())[, display_Map, drop=FALSE], rownames = FALSE, server = FALSE, 
-      extensions = c( 'ColVis'), options = list(iDisplayLength = 50, dom = 'C<"clear">lfrtip', 
-                                                columnDefs = list(list(visible =  F, targets = list(5,6)))))
-    outputOptions(output, 'Map_Table', suspendWhenHidden=FALSE)
+      data.frame(dat_display())[, display_Map, drop=FALSE], rownames = FALSE, server = TRUE, 
+      options = list(dom = 'lfrtip', pageLength = 100,
+                                             lengthMenu = c(100, 200, 500)
+      ))
+    outputOptions(output, 'Map_Table', suspendWhenHidden=TRUE)
 
     output$save_map_data <- downloadHandler(
         filename = function() {
-            paste('Map_data-', Sys.Date(), '.csv', sep='')
+            paste('Map_data-', Sys.Date(), '.tsv', sep='')
         },
         content = function(con) {
-            write.csv(data.frame(dat_display()), con, row.names = F, sep = ",")
+            write.table(data.frame(dat_display()), con, row.names = F, sep = "\t")
         })
 
 # Highcharts portion
 output$pieplot <- renderChart2({
-  data <- station_val$stat_data
+ 
+  data <- station_data()
   data[, charnum := length(Station), by = 'Characteristic']
   data <- data[!duplicated(data[, list(Characteristic)])]
   if(is.null(input$param)){
@@ -949,7 +988,7 @@ output$pieplot <- renderChart2({
 })
 
 output$piepresent <- renderUI({
-    station <- unique(station_val$stat_data[['Station']])
+  station <- station_info()$Name
     if(is.null(station)) {
         br()
         br()
@@ -961,7 +1000,8 @@ output$piepresent <- renderUI({
     })
 
 output$scatterpresent <- renderUI({
-    station <- unique(station_val$stat_data[['Station']])
+  station <- station_info()$Name
+  
     if(is.null(station)) {
         br()
         br()
@@ -978,7 +1018,7 @@ charunit <- reactive({
   data<- if(input$submit_filters==0){
     data.table(filtered_data())
   } else {  data.table(test())}  #[s, , drop = FALSE])
-  data <- data[Station == station_val$station1]
+  data <- data[Station == station_info()$Station]
   if(is.null(input$param)){
     data <- data
   } else {
@@ -1019,7 +1059,7 @@ output$paramgraph4 <- renderUI({
 })
 
 output$timepresent <- renderUI({
-    station <- unique(station_val$stat_data[['Station']])
+    station <- unique(station_data()[['Station']])
     if(is.null(station)) {
         br()
         br()

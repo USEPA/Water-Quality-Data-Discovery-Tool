@@ -48,7 +48,7 @@ function(){
                                   h3("All Imported Data Records", style = "text-align: center")),
                                 fluidRow(h4("This table  displays all of the raw data records imported from the Water Quality Portal", style = "text-align: center")),
                                 fluidRow(column(5), column(2, downloadButton("Save_data1", "Save Data"))),
-                                bsPopover("Save_data1", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                bsPopover("Save_data1", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                           "top", trigger = "hover", options = list(container = "body")),
                                 br(),
                                 fluidRow(DT::dataTableOutput("All_Data"))),
@@ -58,7 +58,7 @@ function(){
                                 fluidRow(h4("These are the records with values for the 'Result Detection Condition Text' field equal to 
                                             'Not Detected' or 'Present below Quantitation Limit'", style = "text-align: center")),
                                 fluidRow(column(5), column(2, downloadButton("Save_data2", "Save Data"))),
-                                bsPopover("Save_data2", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                bsPopover("Save_data2", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                           "top", trigger = "hover", options = list(container = "body")),
                                 br(),
                                 fluidRow(DT::dataTableOutput("ND_Table"))),
@@ -68,7 +68,7 @@ function(){
                                 fluidRow(h4("These data records have no data entered in either the 'Result Measure - Measure Unit Code' or the 
                                             'Quantitation Limit Measure - Measure Unit Code' fields.", style = "text-align: center")),
                                 fluidRow(column(5), column(2, downloadButton("Save_data3", "Save Data"))),
-                                bsPopover("Save_data3", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                bsPopover("Save_data3", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                           "top", trigger = "hover", options = list(container = "body")),
                                 br(),
                                 fluidRow(DT::dataTableOutput("NO_UNITS"))),
@@ -78,7 +78,7 @@ function(){
                                 fluidRow(h4("There are 14 Activity Type Codes which do not require a sample to have a specified method.  These data records 
         do not match those 14 Activity Type Codes AND have no data entered in the 'Result Analytical Method - Method Identifier' field.", style = "text-align: center")),
                                 fluidRow(column(5), column(2, downloadButton("Save_data4", "Save Data"))),
-                                bsPopover("Save_data4", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                bsPopover("Save_data4", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                           "top", trigger = "hover", options = list(container = "body")),
                                 br(),
                                 fluidRow(DT::dataTableOutput("NO_METH"))),
@@ -88,7 +88,7 @@ function(){
                                 fluidRow(h4("These data records are duplicated within the imported data set. This means these records match all fields of 
        another record in the data set except for the 'Activity Type' and 'Activity ID' fields", style = "text-align: center")),
                                 fluidRow(column(5), column(2, downloadButton("Save_data5", "Save Data"))),
-                                bsPopover("Save_data5", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                bsPopover("Save_data5", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                           "top", trigger = "hover", options = list(container = "body")),
                                 br(),
                                 fluidRow(DT::dataTableOutput("DUPS"))),
@@ -99,7 +99,7 @@ function(){
                                  This is the data set passed to the map and table on the 'View Data' page.",
                                              style = "text-align: center")),
                                 fluidRow(column(5), column(2, downloadButton("Save_data6", "Save Data"))),
-                                bsPopover("Save_data6", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                bsPopover("Save_data6", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                           "top", trigger = "hover", options = list(container = "body")),
                                 br(),
                                 fluidRow(DT::dataTableOutput("Filtered"))),
@@ -113,7 +113,7 @@ function(){
                                                  fluidRow(h4(" This table shows summary statistics of all unique combinations of station, media, characteristic, unit, and sample
                                 fraction.", style = "text-align: center")),
                                                  fluidRow(column(5), column(2, downloadButton("Save_Summary_Data", "Save Data"))),
-                                                 bsPopover("Save_Summary_Data", "Save Data", "Click to download a .csv file containing the data being viewed.",
+                                                 bsPopover("Save_Summary_Data", "Save Data", "Click to download a .tsv file containing the data being viewed.",
                                                            "top", trigger = "hover", options = list(container = "body")),
                                                  br()),
                                 fluidRow(DT::dataTableOutput("SUMMARIZED"))))
